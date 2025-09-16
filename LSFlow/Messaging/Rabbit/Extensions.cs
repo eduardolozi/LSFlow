@@ -43,7 +43,7 @@ public static class Extensions
 
     public static void AddRabbitConsumer(this IServiceCollection services, List<QueueBinding> bindings)
     {
-        services.AddSingleton<IHostedService>(provider =>
+        services.AddHostedService(provider =>
         {
             var client = provider.GetRequiredService<Client>();
             return new RabbitConsumer(client, bindings, provider);

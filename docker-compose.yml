@@ -1,0 +1,35 @@
+﻿services:
+  orders.db:
+    image: postgres:alpine
+    container_name: orders-db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - orders-db-volume:/var/lib/postgresql/data
+  payments.db:
+    image: postgres:alpine
+    container_name: payments-db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - payments-db-volume:/var/lib/postgresql/data
+  rabbit:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: "rabbitmq"
+      RABBITMQ_DEFAULT_PASS: "rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+volumes:
+  orders-db-volume:
+  payments-db-volume:

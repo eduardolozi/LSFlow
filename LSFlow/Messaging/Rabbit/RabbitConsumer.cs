@@ -55,7 +55,7 @@ public class RabbitConsumer(Client client, List<QueueBinding> bindings, IService
 
                 if (!alreadyProcessed)
                 {
-                    // await eventDispatcher.DispatchAsync(message.EventType, message.Data, stoppingToken);
+                    await eventDispatcher.DispatchAsync(message.EventType, message.Data, stoppingToken);
 
                     await dbContext.ProcessedMessages.AddAsync(new ProcessedMessage
                     {
