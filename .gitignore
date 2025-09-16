@@ -1,0 +1,9 @@
+﻿**/bin/
+**/obj/
+.vs/
+
+# IDEs and editors
+.idea/
+*.DotSettings.user
+
+nuget.config
