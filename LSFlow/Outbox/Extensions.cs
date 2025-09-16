@@ -14,14 +14,8 @@ public static class Extensions
         modelBuilder.Entity<ProcessedMessage>();
     }
 
-    public static void AddOutbox<TDbContext, TPublisher, TEventDispatcher>(this IServiceCollection services)
-        where TDbContext : DbContext, IOutboxDbContext 
-        where TPublisher : class, IPublisher
-        where TEventDispatcher : class, IEventDispatcher
+    public static void AddOutbox(this IServiceCollection services)
     {
-        services.AddScoped<IOutboxDbContext, TDbContext>();
-        services.AddScoped<IPublisher, TPublisher>();
-        services.AddScoped<IEventDispatcher, TEventDispatcher>();
         services.AddHostedService<OutboxProcessor>();
     }
 }

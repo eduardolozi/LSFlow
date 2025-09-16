@@ -4,6 +4,7 @@ using LSFlow.Messaging.Rabbit.Models;
 using LSFlow.Outbox.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace LSFlow.Messaging.Rabbit;
 
@@ -40,16 +41,12 @@ public static class Extensions
         services.AddScoped<Topology>();
     }
 
-    public static void AddRabbitConsumer<TDbContext, TEventDispatcher>(this IServiceCollection services, List<QueueBinding> bindings)
-        where TDbContext : DbContext, IOutboxDbContext
-        where TEventDispatcher : class, IEventDispatcher
+    public static void AddRabbitConsumer(this IServiceCollection services, List<QueueBinding> bindings)
     {
-        services.AddHostedService(provider =>
+        services.AddSingleton<IHostedService>(provider =>
         {
             var client = provider.GetRequiredService<Client>();
-            var eventDispatcher = provider.GetRequiredService<TEventDispatcher>();
-            var outboxDbContext = provider.GetRequiredService<TDbContext>();
-            return new RabbitConsumer(client, bindings, eventDispatcher, outboxDbContext);
+            return new RabbitConsumer(client, bindings, provider);
         });
     }
 }

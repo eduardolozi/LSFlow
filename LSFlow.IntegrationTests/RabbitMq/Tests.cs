@@ -9,9 +9,16 @@ using Polly.Retry;
 namespace LSFlow.IntegrationTests.RabbitMq;
 
 [Collection("BaseFixtureCollection")]
-public class Tests(BaseFixture baseFixture)
+public class Tests
 {
-    private readonly AppDbContext _dbContext = baseFixture.ServiceProvider.GetRequiredService<AppDbContext>();
+    private readonly IServiceScope _scope;
+    private readonly AppDbContext _dbContext;
+
+    public Tests(BaseFixture baseFixture)
+    {
+        _scope = baseFixture.ServiceProvider.CreateScope();
+        _dbContext = _scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    }
 
     [Fact]
     public async Task Test1()
@@ -28,6 +35,7 @@ public class Tests(BaseFixture baseFixture)
         await _dbContext.OutboxMessages.AddAsync(paymentProcessing);
         await _dbContext.SaveChangesAsync();
 
+        await Task.Delay(10000);
         var result = await Policy
             .HandleResult<bool>(r => r == false)
             .WaitAndRetryAsync(

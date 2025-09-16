@@ -1,16 +1,21 @@
 ﻿using LSFlow.Messaging.Interfaces;
 using LSFlow.Outbox.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace LSFlow.Outbox;
 
-public class OutboxProcessor(IOutboxDbContext dbContext, IPublisher publisher) : BackgroundService
+public class OutboxProcessor(IServiceProvider serviceProvider) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var scope = serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IOutboxDbContext>();
+            var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
+            
             var pendingMessages = await dbContext
                 .OutboxMessages
                 .OrderBy(x => x.CreatedAt)

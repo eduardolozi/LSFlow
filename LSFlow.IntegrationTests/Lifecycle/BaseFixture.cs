@@ -1,5 +1,4 @@
 ﻿using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Configurations;
 using LSFlow.Messaging.Rabbit;
 using LSFlow.Messaging.Rabbit.Configurations;
 using LSFlow.Messaging.Rabbit.Models;
@@ -9,12 +8,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
+using Microsoft.Extensions.Hosting;
 
 namespace LSFlow.IntegrationTests;
 
 public class BaseFixture : IAsyncLifetime
 {
-    public ServiceProvider ServiceProvider { get; set; }
+    public IServiceProvider ServiceProvider { get; set; }
+    private IHost _host;
     public static IServiceCollection Services { get; private set; } = new ServiceCollection();
     
     private PostgreSqlContainer _pgContainer;
@@ -32,13 +33,12 @@ public class BaseFixture : IAsyncLifetime
         await _pgContainer.StartAsync();
 
         var pgHostMappedPort = _pgContainer.GetMappedPublicPort(PostgreSqlBuilder.PostgreSqlPort);
-        Services.AddDbContext<IOutboxDbContext, AppDbContext>(options =>
-            options.UseNpgsql($"Host={_pgContainer.Hostname};Port={pgHostMappedPort};Username={PostgreSqlBuilder.DefaultUsername};Password={PostgreSqlBuilder.DefaultPassword};Database={PostgreSqlBuilder.DefaultDatabase}")
-        );
         
         _rabbitContainer = new RabbitMqBuilder()
+            .WithImage("rabbitmq:3.11-management")
             .WithUsername(RabbitMqBuilder.DefaultUsername)
             .WithPassword(RabbitMqBuilder.DefaultPassword)
+            .WithPortBinding(0, 15672)
             .WithPortBinding(0, RabbitMqBuilder.RabbitMqPort)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(RabbitMqBuilder.RabbitMqPort))
             .Build();
@@ -48,29 +48,41 @@ public class BaseFixture : IAsyncLifetime
 
         SetRabbitEnvironments(rabbitHostMappedPort);
         
-        Services.AddRabbitClient();
-        Services.AddOutbox<AppDbContext, RabbitPublisher, EventDispatcher>();
-        
-        var bindings = new List<QueueBinding>
-        {
-            new() { QueueName = "payment.notifications", ExchangeName = "payments", RoutingKeys = ["payment.confirmed", "payment.rejected"] },
-            new() { QueueName = "payment.events", ExchangeName = "payments", RoutingKeys = ["payment.processing", "payment.confirmed", "payment.rejected"] },
-            new () { QueueName = "orders.analytics", ExchangeName = "orders" },
-            new () { QueueName = "orders.events", ExchangeName = "orders" }                              
-        };
-        
-        Services.AddRabbitConsumer<AppDbContext, EventDispatcher>(bindings);
-        
-        ServiceProvider = Services.BuildServiceProvider();
+        _host = Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddDbContext<IOutboxDbContext, AppDbContext>(options =>
+                    options.UseNpgsql($"Host={_pgContainer.Hostname};Port={pgHostMappedPort};Username={PostgreSqlBuilder.DefaultUsername};Password={PostgreSqlBuilder.DefaultPassword};Database={PostgreSqlBuilder.DefaultDatabase}")
+                );
 
+                services.AddRabbitClient();
+                services.AddOutbox();
+
+                var bindings = new List<QueueBinding>
+                {
+                    new() { QueueName = "payment.notifications", ExchangeName = "payments", RoutingKeys = ["payment.confirmed", "payment.rejected"] },
+                    new() { QueueName = "payment.events", ExchangeName = "payments", RoutingKeys = ["payment.processing", "payment.confirmed", "payment.rejected"] },
+                    new () { QueueName = "orders.analytics", ExchangeName = "orders" },
+                    new () { QueueName = "orders.events", ExchangeName = "orders" }                              
+                };
+        
+                services.AddRabbitConsumer(bindings);
+            })
+            .Build();
+
+        ServiceProvider = _host.Services;
+        
         await InitializeDatabase(ServiceProvider);
         await DefineRabbitTopology(ServiceProvider);
+
+        await _host.StartAsync();
     }
 
-    private static async Task InitializeDatabase(ServiceProvider serviceProvider)
+    private static async Task InitializeDatabase(IServiceProvider serviceProvider)
     {
-        var db = serviceProvider.GetRequiredService<AppDbContext>();
-        
+        using var scope = serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
         if (await db.Database.EnsureCreatedAsync())
             await db.Database.MigrateAsync();
     }
@@ -84,9 +96,10 @@ public class BaseFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("RABBIT_VHOST", "/");
     }
 
-    private static async Task DefineRabbitTopology(ServiceProvider serviceProvider)
+    private static async Task DefineRabbitTopology(IServiceProvider serviceProvider)
     {
-        var topology = serviceProvider.GetRequiredService<Topology>();
+        using var scope = serviceProvider.CreateScope();
+        var topology = scope.ServiceProvider.GetRequiredService<Topology>();
         
         await topology.AddExchange("payment", ExchangeType.Topic);
         await topology.AddQueue("payment.notifications");
@@ -101,6 +114,7 @@ public class BaseFixture : IAsyncLifetime
     {
         await _pgContainer.StopAsync();
         await _rabbitContainer.StopAsync();
-        await ServiceProvider.DisposeAsync();
+        await _host.StopAsync();
+        _host.Dispose();
     }
 }
