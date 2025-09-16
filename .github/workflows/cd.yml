@@ -2,8 +2,7 @@
 
 on:
   workflow_run: 
-    workflows:
-      - ["CI pipeline"]
+    workflows: ["CI pipeline"]
     types: 
       - completed
     branches:
@@ -16,6 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
       - run: dotnet build -c Release
       - run: dotnet test -c Release --no-build
       - run: dotnet pack -c Release --no-build --output .

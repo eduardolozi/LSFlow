@@ -4,6 +4,12 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <PackageId>LSFlow</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>Eduardo Lozano</Authors>
+        <Description>A .NET library for implementing reliable messaging using the Outbox Pattern</Description>
+        <PackageTags>messaging;outbox;rabbitmq</PackageTags>
+        <RepositoryUrl>https://github.com/eduardolozi/LSFlow</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
