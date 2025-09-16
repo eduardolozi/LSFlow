@@ -1,4 +1,7 @@
 ﻿using DotNet.Testcontainers.Builders;
+using LSFlow.IntegrationTests.Events;
+using LSFlow.IntegrationTests.UseCases;
+using LSFlow.Messaging.Interfaces;
 using LSFlow.Messaging.Rabbit;
 using LSFlow.Messaging.Rabbit.Configurations;
 using LSFlow.Messaging.Rabbit.Models;
@@ -10,7 +13,7 @@ using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Microsoft.Extensions.Hosting;
 
-namespace LSFlow.IntegrationTests;
+namespace LSFlow.IntegrationTests.Lifecycle;
 
 public class BaseFixture : IAsyncLifetime
 {
@@ -39,14 +42,13 @@ public class BaseFixture : IAsyncLifetime
             .WithUsername(RabbitMqBuilder.DefaultUsername)
             .WithPassword(RabbitMqBuilder.DefaultPassword)
             .WithPortBinding(0, 15672)
-            .WithPortBinding(0, RabbitMqBuilder.RabbitMqPort)
+            .WithPortBinding(5672, RabbitMqBuilder.RabbitMqPort)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(RabbitMqBuilder.RabbitMqPort))
             .Build();
         
         await _rabbitContainer.StartAsync();
-        var rabbitHostMappedPort = _rabbitContainer.GetMappedPublicPort(RabbitMqBuilder.RabbitMqPort);
-
-        SetRabbitEnvironments(rabbitHostMappedPort);
+        
+        SetRabbitEnvironments();
         
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
@@ -57,11 +59,14 @@ public class BaseFixture : IAsyncLifetime
 
                 services.AddRabbitClient();
                 services.AddOutbox();
+                
+                services.AddScoped<IEventDispatcher, EventDispatcher>();
+                services.AddScoped<IEventHandler<PaymentEvent>, PaymentEventHandler>();
 
                 var bindings = new List<QueueBinding>
                 {
-                    new() { QueueName = "payment.notifications", ExchangeName = "payments", RoutingKeys = ["payment.confirmed", "payment.rejected"] },
-                    new() { QueueName = "payment.events", ExchangeName = "payments", RoutingKeys = ["payment.processing", "payment.confirmed", "payment.rejected"] },
+                    new() { QueueName = "payments.notifications", ExchangeName = "payments", RoutingKeys = ["payment.confirmed", "payment.rejected"] },
+                    new() { QueueName = "payments.events", ExchangeName = "payments", RoutingKeys = ["payment.processing", "payment.confirmed", "payment.rejected"] },
                     new () { QueueName = "orders.analytics", ExchangeName = "orders" },
                     new () { QueueName = "orders.events", ExchangeName = "orders" }                              
                 };
@@ -74,7 +79,7 @@ public class BaseFixture : IAsyncLifetime
         
         await InitializeDatabase(ServiceProvider);
         await DefineRabbitTopology(ServiceProvider);
-
+        
         await _host.StartAsync();
     }
 
@@ -87,12 +92,12 @@ public class BaseFixture : IAsyncLifetime
             await db.Database.MigrateAsync();
     }
     
-    private void SetRabbitEnvironments(ushort hostPort)
+    private void SetRabbitEnvironments()
     {
         Environment.SetEnvironmentVariable("RABBIT_USERNAME", RabbitMqBuilder.DefaultUsername);
         Environment.SetEnvironmentVariable("RABBIT_PASSWORD", RabbitMqBuilder.DefaultPassword);
         Environment.SetEnvironmentVariable("RABBIT_HOSTNAME", _rabbitContainer.Hostname);
-        Environment.SetEnvironmentVariable("RABBIT_PORT", $"{hostPort}");
+        Environment.SetEnvironmentVariable("RABBIT_PORT", "5672");
         Environment.SetEnvironmentVariable("RABBIT_VHOST", "/");
     }
 
@@ -100,11 +105,9 @@ public class BaseFixture : IAsyncLifetime
     {
         using var scope = serviceProvider.CreateScope();
         var topology = scope.ServiceProvider.GetRequiredService<Topology>();
-        
-        await topology.AddExchange("payment", ExchangeType.Topic);
-        await topology.AddQueue("payment.notifications");
-        await topology.AddQueue("payment.events");
-
+        await topology.AddExchange("payments", ExchangeType.Topic);
+        await topology.AddQueue("payments.notifications");
+        await topology.AddQueue("payments.events");
         await topology.AddExchange("orders", ExchangeType.Fanout);
         await topology.AddQueue("orders.events");
         await topology.AddQueue("orders.analytics");

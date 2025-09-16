@@ -10,12 +10,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
     public DbSet<ProcessedMessage> ProcessedMessages { get; set; }
-    // public DbSet<Order> Orders { get; set; }
-    // public DbSet<Item> Items { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.AddOutbox();
-        base.OnModelCreating(modelBuilder);
     }
 }

@@ -5,21 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace LSFlow.IntegrationTests;
 
-public class EventDispatcher : IEventDispatcher
+public class EventDispatcher(IServiceProvider provider) : IEventDispatcher
 {
-    private readonly IServiceProvider _provider;
-    private readonly Dictionary<string, Type> _eventTypeMapping;
-
-    public EventDispatcher(IServiceProvider provider)
+    private readonly Dictionary<string, Type> _eventTypeMapping = new()
     {
-        _provider = provider;
-
-        _eventTypeMapping = new Dictionary<string, Type>
-        {
-            { "OrderCreated", typeof(OrderCreatedEvent) },
-            { "PaymentProcessed", typeof(PaymentEvent) }
-        };
-    }
+        { "OrderCreated", typeof(OrderCreatedEvent) },
+        { "payment.processing", typeof(PaymentEvent) }
+    };
 
     public async Task DispatchAsync(string eventType, string payload, CancellationToken cancellationToken = default)
     {
@@ -28,9 +20,9 @@ public class EventDispatcher : IEventDispatcher
 
         var @event = JsonSerializer.Deserialize(payload, type);
         await Task.Delay(100, cancellationToken);
-        // var handlerType = typeof(IEventHandler<>).MakeGenericType(type);
-        // dynamic handler = _provider.GetRequiredService(handlerType);
-        //
-        // await handler.HandleAsync((dynamic)@event!, cancellationToken);
+        var handlerType = typeof(IEventHandler<>).MakeGenericType(type);
+        dynamic handler = provider.GetRequiredService(handlerType);
+        
+        await handler.HandleAsync((dynamic)@event!, cancellationToken);
     }
 }

@@ -1,0 +1,22 @@
+﻿name: CD pipeline
+
+on:
+  workflow_run: 
+    workflows:
+      - ["CI pipeline"]
+    types: 
+      - completed
+    branches:
+      - main
+  
+jobs:
+  publish-nuget:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+      - run: dotnet build -c Release
+      - run: dotnet test -c Release --no-build
+      - run: dotnet pack -c Release --no-build --output .
+      - run: dotnet nuget push "*.nupkg" --api-key ${{secrets.NUGET_KEY}} --source https://api.nuget.org/v3/index.json

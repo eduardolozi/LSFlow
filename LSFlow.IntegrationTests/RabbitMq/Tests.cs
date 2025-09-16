@@ -1,10 +1,10 @@
 ﻿using LSFlow.IntegrationTests.Events;
 using LSFlow.IntegrationTests.Events.Enum;
+using LSFlow.IntegrationTests.Lifecycle;
 using LSFlow.IntegrationTests.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
-using Polly.Retry;
 
 namespace LSFlow.IntegrationTests.RabbitMq;
 
@@ -35,7 +35,6 @@ public class Tests
         await _dbContext.OutboxMessages.AddAsync(paymentProcessing);
         await _dbContext.SaveChangesAsync();
 
-        await Task.Delay(10000);
         var result = await Policy
             .HandleResult<bool>(r => r == false)
             .WaitAndRetryAsync(
@@ -54,7 +53,6 @@ public class Tests
 
                 return isProcessed && processedMessage != null;
             });
-
 
         Assert.True(result);
     }
