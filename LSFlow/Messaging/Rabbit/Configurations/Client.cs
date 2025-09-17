@@ -31,4 +31,14 @@ public class Client(string username, string password, string hostname, int port,
         return await connection!.CreateChannelAsync();
     }
     
+    public async Task<IChannel> GetChannelWithPublisherConfirmation()
+    {
+        var connection = await GetConnection();
+        var channelOptions = new CreateChannelOptions(
+            publisherConfirmationsEnabled: true,
+            publisherConfirmationTrackingEnabled: true
+        );
+        return await connection!.CreateChannelAsync();
+    }
+    
 }

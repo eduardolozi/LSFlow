@@ -9,14 +9,32 @@ namespace LSFlow.Messaging.Rabbit;
 
 public class RabbitPublisher(Client client) : IPublisher
 {
-    public async Task Publish(string exchange, string routingKey, OutboxMessage message)
+    public async Task Publish(List<OutboxMessage> messages)
     {
         var channel = await client.GetChannel();
-        
-        //study the scenario of mandatory = true, using callback to catch the message not delivered to queue
-        var payload = JsonSerializer.Serialize(message);
-        await channel.BasicPublishAsync(exchange, routingKey, false, Encoding.UTF8.GetBytes(payload));
-        
-        await channel.CloseAsync();
+        var publishTasks = new List<(ValueTask, OutboxMessage)>();
+        foreach (var message in messages)
+        {
+            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
+            var publishTask = channel.BasicPublishAsync(exchange: message.Destination, routingKey: message.Key, body: body, mandatory: true);
+            publishTasks.Add((publishTask, message));
+        }
+        await AwaitPublishes(publishTasks);
+    }
+
+    private static async Task AwaitPublishes(List<(ValueTask publishTask, OutboxMessage message)> publishTasks)
+    {
+        foreach (var pt in publishTasks)
+        {
+            try
+            {
+                await pt.publishTask;
+                pt.message.IsProcessed = true;
+            }
+            catch (Exception ex)
+            {
+                pt.message.IsProcessed = false;
+            }
+        }
     }
 }

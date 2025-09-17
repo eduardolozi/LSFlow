@@ -29,12 +29,14 @@ public class OutboxProcessor(IServiceProvider serviceProvider) : BackgroundServi
                 continue;
             }
             
-            foreach (var message in pendingMessages) // study the options of parallelism
+            try
             {
-                await publisher.Publish(message.Destination, message.Key, message);
-                message.IsProcessed = true;
+                await publisher.Publish(pendingMessages);
             }
-            
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error at publishing the message batch: {ex.Message}");
+            }
             await dbContext.SaveChangesAsync(stoppingToken);
         }
     }
